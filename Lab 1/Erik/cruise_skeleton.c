@@ -336,7 +336,37 @@ void SwitchIO(void* pdata)
   {
     INT8U err;
     OSSemPend(Sem_Switch,0,&err);
-    printf("SwitchIO working \n");
+    //printf("SwitchIO working \n");
+    int switches = switches_pressed() & 0x3;
+    if( (switches & 0x1) == 0 ) {
+        if(engine == off) {
+            int leds = IORD_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE) & ~0x1;
+            IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE, leds);
+            engine = on;
+            printf("Turning engine on\n");
+        } // else do nothing
+    } else {
+        if(engine == on) {
+            int leds = IORD_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE) | 0x1;
+            IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE, leds);
+            engine = off;
+            printf("Turning engine off\n");
+        } // else do nothing
+    }
+    
+    if( (switches & 0x2) == 0 ) {
+        if(cruise_control == off) {
+            // light red1
+            cruise_control = on;
+            printf("Turning cruise on\n");
+        } // else do nothing
+    } else {
+        if(cruise_control == on) {
+            // put out red1
+            cruise_control = off;
+            printf("Turning cruise off\n");
+        } // else do nothing
+    }
   }
 }
 
