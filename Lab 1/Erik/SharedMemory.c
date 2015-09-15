@@ -19,25 +19,24 @@ OS_STK    task1_stk[TASK_STACKSIZE];
 OS_EVENT* aSemaphore;
 OS_EVENT* bSemaphore;
 
-int task0_state = 0;
-int task1_state = 0;
+int *sharedAddress;
+
+OS_MEM *sharedMem;
+int buf[2];
 
 /* TODO */
 void task0(void* pdata)
 {
     INT8U err;
-    int* state = pdata;
     
     while(1) {
         OSSemPend(aSemaphore, 0, &err);
-        printf("Task 0 - State %d\n", *state);
-        if(*state == 0) {
-            *state = 1;
-            OSSemPost(bSemaphore);
-        } else {
-            *state = 0;
-            OSSemPost(aSemaphore);
-        }
+        printf("Sending     : %d\n", ++(*sharedAddress));
+        OSSemPost(bSemaphore);
+        OSSemPend(aSemaphore, 0, &err);
+        printf("Receiving   : %d\n", *sharedAddress);
+        *sharedAddress *= -1;
+        OSSemPost(aSemaphore);
     }
 }
 
@@ -45,31 +44,40 @@ void task0(void* pdata)
 void task1(void* pdata)
 {
     INT8U err;
-    int* state = pdata;
+        
     while(1) {
         OSSemPend(bSemaphore, 0, &err);
-        printf("Task 1 - State %d\n", *state);
-        if(*state == 1) {
-            *state = 0;
-            OSSemPost(aSemaphore);
-        } else {
-            *state = 1;
-            OSSemPost(bSemaphore);
-        }
+        *sharedAddress *= (-1);
+        OSSemPost(aSemaphore);
     }
 }
 
 /* The main function creates two task and starts multi-tasking */
 int main(void)
 {
-  printf("Lab 1.4 - Handshake\n");
+  printf("Lab 2.5 - Shared Memory\n");
   
+  INT8U err;
   aSemaphore = OSSemCreate(1);
   bSemaphore = OSSemCreate(0);
+  
+  sharedMem = OSMemCreate(&buf[0], 2, sizeof(int), &err);
+  if(err != OS_ERR_NONE) {
+    printf("Error: could not allocate memory! Code = %d\n", err);
+    return -1;
+  }
+  
+  sharedAddress = OSMemGet(sharedMem, &err);
+  if(err != OS_ERR_NONE) {
+    printf("Error: could not get address, code = %d\n", err);
+    return -1;
+  }
+  
+  *sharedAddress = 0; /* init value */
 
   OSTaskCreateExt
     (task0,                        // Pointer to task code
-     &task0_state,                 // Pointer to argument that is
+     NULL,                         // Pointer to argument that is
                                    // passed to task
      &task0_stk[TASK_STACKSIZE-1], // Pointer to top of task stack
      TASK0_PRIORITY,               // Desired Task priority
@@ -84,7 +92,7 @@ int main(void)
                
   OSTaskCreateExt
     (task1,                        // Pointer to task code
-     &task1_state,                 // Pointer to argument that is
+     NULL,                         // Pointer to argument that is
                                    // passed to task
      &task1_stk[TASK_STACKSIZE-1], // Pointer to top of task stack
      TASK1_PRIORITY,               // Desired Task priority
