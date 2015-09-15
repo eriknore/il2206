@@ -1,0 +1,12 @@
+Lab 1 - preparation question
+
+1) 
+a) true. Write is non-blocking (for all three OSQPost___): 
+"If the message queue is full, an error code is returned indicating that the queue is
+full. OSQPostOpt() then immediately returns to its caller, and the message is not placed in the queue."
+
+b) false.
+c) false.
+d) false.
+e) true, timeout is set as a parameter.
+f) true if timeout is set to 0.
