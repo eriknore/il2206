@@ -339,6 +339,19 @@ void ControlTask(void* pdata)
       // timer!
       //OSTimeDlyHMSM(0,0,0, CONTROL_PERIOD);
       
+    /* P-controller starts here */
+      if (cruise_control == on)
+      {
+        if (throttle == 0){throttle=40;} // default to 40 if no throttle
+        else{
+            /* Increase in throttle proportional to the difference 
+ *              * between target and current velocity.
+ *                           * 100's used to bypass integer rounding. */ 
+            throttle = (throttle*(100+100*(target_velocity-current_velocity)/current_velocity))/100;
+            if(throttle > 80){throttle=80;}
+            else if(throttle < 0){throttle=0;}
+        }
+
       IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE, led_red);
       IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_GREENLED9_BASE, led_green);
     }
