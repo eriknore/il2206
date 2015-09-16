@@ -25,7 +25,7 @@
 #define LED_RED_1 0x00000002 // Top Gear
 
 #define LED_GREEN_0 0x0001 // Cruise Control activated
-#define LED_GREEN_2 0x0002 // Cruise Control Button
+#define LED_GREEN_2 0x0004 // Cruise Control Button
 #define LED_GREEN_4 0x0010 // Brake Pedal
 #define LED_GREEN_6 0x0040 // Gas Pedal
 
@@ -53,7 +53,7 @@ OS_STK SwitchIO_Stack[TASK_STACKSIZE];
 
 #define CONTROL_PERIOD  300
 #define VEHICLE_PERIOD  300
-#define POLL_PERIOD 100
+#define POLL_PERIOD 500
 
 /*
  * Definition of Kernel Objects 
@@ -62,6 +62,7 @@ OS_STK SwitchIO_Stack[TASK_STACKSIZE];
 // Mailboxes
 OS_EVENT *Mbox_Throttle;
 OS_EVENT *Mbox_Velocity;
+OS_EVENT *Mbox_Target;
 
 // Semaphores
 OS_EVENT *Sem_Veh;
@@ -173,6 +174,16 @@ void show_velocity_on_sevenseg(INT8S velocity){
  */
 void show_target_velocity(INT8U target_vel)
 {
+  int out;
+  INT8U out_high = 0;
+  INT8U out_low = 0;
+
+  out_high = int2seven(target_vel / 10);
+  out_low = int2seven(target_vel - (target_vel/10) * 10);
+  
+  out =     out_high << 7  |
+            out_low;
+  IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_HEX_HIGH28_BASE,out);
 }
 
 /*
@@ -186,6 +197,13 @@ void show_target_velocity(INT8U target_vel)
  */
 void show_position(INT16U position)
 {
+    /* position in dm, not in m! */
+    if      (position < 4000)  led_red = (0xfff & led_red) | 0x1  << 17;
+    else if (position < 8000)  led_red = (0xfff & led_red) | 0x3  << 16;
+    else if (position < 12000) led_red = (0xfff & led_red) | 0x7  << 15;
+    else if (position < 16000) led_red = (0xfff & led_red) | 0xf  << 14;
+    else if (position < 20000) led_red = (0xfff & led_red) | 0x1f << 13;
+    else if (position < 24000) led_red = (0xfff & led_red) | 0x3f << 12;
 }
 
 /*
@@ -286,8 +304,8 @@ void VehicleTask(void* pdata)
       position = adjust_position(position, velocity, acceleration, 300); 
       velocity = adjust_velocity(velocity, acceleration, brake_pedal, 300); 
       printf("Position: %dm\n", position / 10);
-      printf("Velocity: %4.1fm/s\n", velocity /10.0);
-      printf("Throttle: %dV\n", *throttle / 10);
+//      printf("Velocity: %4.1fm/s\n", velocity /10.0);
+//      printf("Throttle: %dV\n", *throttle / 10);
       show_velocity_on_sevenseg((INT8S) (velocity / 10));
     }
 } 
@@ -297,12 +315,16 @@ void VehicleTask(void* pdata)
  * on sensors and generates responses.
  */
 
+void turn_off_cruise_control(); /* pre declaration */
+
 void ControlTask(void* pdata)
 {
   INT8U err;
   INT8U throttle = 40; /* Value between 0 and 80, which is interpreted as between 0.0V and 8.0V */
   void* msg;
   INT16S* current_velocity;
+  
+  turn_off_cruise_control();
 
   printf("Control Task created!\n");
 
@@ -316,55 +338,116 @@ void ControlTask(void* pdata)
       OSSemPend(Sem_Cont, 0, &err);
       // timer!
       //OSTimeDlyHMSM(0,0,0, CONTROL_PERIOD);
+      
+      IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE, led_red);
+      IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_GREENLED9_BASE, led_green);
     }
+}
+
+void turn_off_cruise_control()
+{
+    led_green = led_green & ~LED_GREEN_2; // LEDG2 off
+    cruise_control = off;
+    show_target_velocity(0);
+    printf("cruise_control off\n");
 }
 
 // button-polling task
 void ButtonIO(void* pdata)
 {
+    INT8U err;
+    int keys;
   while(1)
   {  
-    INT8U err;
     OSSemPend(Sem_Button,0,&err);
-    printf("ButtonIO working \n");
+    keys = buttons_pressed();
+    if( keys & CRUISE_CONTROL_FLAG ) {  /* key 1 */
+        if(cruise_control == on) {
+            turn_off_cruise_control(); 
+        } else if(top_gear == on) {
+            INT16S* vel = (INT16S*) OSMboxPend(Mbox_Velocity, 0, &err);
+            if( (*vel / 10) >= 20) {
+                show_target_velocity((INT8U) (*vel / 10));
+                err = OSMboxPost(Mbox_Target, (void *) vel);
+                led_green = led_green | LED_GREEN_2; // LEDG2 on
+                cruise_control = on;
+                printf("cruise_control on\n");
+            }
+        }
+    }
+    
+    if( keys & BRAKE_PEDAL_FLAG ) {     /* key 2 */
+        if(brake_pedal == off) {
+            brake_pedal = on;
+            led_green = led_green | LED_GREEN_4; // LEDG4 on
+            turn_off_cruise_control();
+            printf("brake pedal down\n");
+        }
+    } else {
+        if(brake_pedal == on) {
+            led_green = led_green & ~LED_GREEN_4; // LEDG4 off
+            brake_pedal = off;
+            printf("brake pedal up\n");
+        }
+    }
+    
+    if( (keys & GAS_PEDAL_FLAG) && engine == on) {       /* key 3 */
+        if(gas_pedal == off) {
+            gas_pedal = on;
+            led_green = led_green | LED_GREEN_6; // LEDG6 on
+            turn_off_cruise_control();
+            printf("gas pedal down\n");
+        }
+    } else {
+        if(gas_pedal == on) {
+            led_green = led_green & ~LED_GREEN_6; // LEDG6 off
+            gas_pedal = off;
+            printf("gas pedal up\n");
+        }
+    }
+    //printf("ButtonIO working \n");
   }
 }
 
 void SwitchIO(void* pdata)
 {
+  INT8U err;
+  int switches;
+  
   while(1)
   {
-    INT8U err;
     OSSemPend(Sem_Switch,0,&err);
     //printf("SwitchIO working \n");
-    int switches = switches_pressed() & 0x3;
-    if( (switches & 0x1) == 0 ) {
+    switches = switches_pressed() & 0x3;
+    if(switches & ENGINE_FLAG) {
         if(engine == off) {
-            int leds = IORD_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE) & ~0x1;
-            IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE, leds);
+            led_red = led_red | LED_RED_0;
             engine = on;
             printf("Turning engine on\n");
         } // else do nothing
     } else {
         if(engine == on) {
-            int leds = IORD_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE) | 0x1;
-            IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE, leds);
-            engine = off;
-            printf("Turning engine off\n");
+            INT16S* vel = (INT16S*) OSMboxPend(Mbox_Velocity, 0, &err);
+            if(*vel == 0) {
+                led_red = led_red & ~LED_RED_0;
+                engine = off;
+                printf("Turning engine off\n");
+            }
         } // else do nothing
     }
     
-    if( (switches & 0x2) == 0 ) {
-        if(cruise_control == off) {
-            // light red1
-            cruise_control = on;
-            printf("Turning cruise on\n");
+    if(switches & TOP_GEAR_FLAG) {
+        if(top_gear == off) {
+            led_red = led_red | LED_RED_1;
+            top_gear = on;
+            printf("Turning top gear on\n");
         } // else do nothing
     } else {
-        if(cruise_control == on) {
-            // put out red1
-            cruise_control = off;
-            printf("Turning cruise off\n");
+        if(top_gear == on) {
+            led_red = led_red & ~LED_RED_1;
+            top_gear = off;
+            turn_off_cruise_control();
+            printf("Turning top gear off\n");
         } // else do nothing
     }
   }
@@ -418,6 +501,7 @@ void StartTask(void* pdata)
   // Mailboxes
   Mbox_Throttle = OSMboxCreate((void*) 0); /* Empty Mailbox - Throttle */
   Mbox_Velocity = OSMboxCreate((void*) 0); /* Empty Mailbox - Velocity */
+  Mbox_Target   = OSMboxCreate((void*) 0); /* Empty Mailbox - Target */
   
   // Semaphores
   Sem_Veh = OSSemCreate(1);
