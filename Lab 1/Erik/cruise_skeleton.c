@@ -53,7 +53,7 @@ OS_STK SwitchIO_Stack[TASK_STACKSIZE];
 
 #define CONTROL_PERIOD  300
 #define VEHICLE_PERIOD  300
-#define POLL_PERIOD 500
+#define POLL_PERIOD 300
 
 /*
  * Definition of Kernel Objects 
@@ -304,8 +304,8 @@ void VehicleTask(void* pdata)
       position = adjust_position(position, velocity, acceleration, 300); 
       velocity = adjust_velocity(velocity, acceleration, brake_pedal, 300); 
       printf("Position: %dm\n", position / 10);
-//      printf("Velocity: %4.1fm/s\n", velocity /10.0);
-//      printf("Throttle: %dV\n", *throttle / 10);
+      printf("Velocity: %4.1fm/s\n", velocity /10.0);
+      printf("Throttle: %dV\n", *throttle / 10);
       show_velocity_on_sevenseg((INT8S) (velocity / 10));
     }
 } 
@@ -320,9 +320,10 @@ void turn_off_cruise_control(); /* pre declaration */
 void ControlTask(void* pdata)
 {
   INT8U err;
-  INT8U throttle = 40; /* Value between 0 and 80, which is interpreted as between 0.0V and 8.0V */
+  INT8U throttle = 0; /* Value between 0 and 80, which is interpreted as between 0.0V and 8.0V */
   void* msg;
   INT16S* current_velocity;
+  INT16S* target_velocity; // change to INT8U
   
   turn_off_cruise_control();
 
@@ -333,25 +334,41 @@ void ControlTask(void* pdata)
       msg = OSMboxPend(Mbox_Velocity, 0, &err);
       current_velocity = (INT16S*) msg;
       
-      err = OSMboxPost(Mbox_Throttle, (void *) &throttle);
-
+      msg = OSMboxAccept(Mbox_Target);
+      if(msg == NULL)
+        target_velocity = 0;
+      else 
+        target_velocity = (INT16S*) msg;
+      
       OSSemPend(Sem_Cont, 0, &err);
       // timer!
       //OSTimeDlyHMSM(0,0,0, CONTROL_PERIOD);
       
-    /* P-controller starts here */
-      if (cruise_control == on)
-      {
-        if (throttle == 0){throttle=40;} // default to 40 if no throttle
-        else{
+      /* P-controller starts here */
+      if (cruise_control == on) {
+        printf("target = %d : current = %d\n", *target_velocity, *current_velocity);
+        if (throttle == 0){ // minimum possible velocity is 1 if cruise control == on
+            throttle=40; // default to 40 if no throttle
+        } else {
             /* Increase in throttle proportional to the difference 
- *              * between target and current velocity.
- *                           * 100's used to bypass integer rounding. */ 
-            throttle = (throttle*(100+100*(target_velocity-current_velocity)/current_velocity))/100;
-            if(throttle > 80){throttle=80;}
-            else if(throttle < 0){throttle=0;}
+             * between target and current velocity.
+             * 100's used to bypass integer rounding. 
+             */ 
+            throttle = (throttle * (100 + 100 * (*target_velocity - *current_velocity) / *current_velocity)) / 100;
+            // could this overflow? Probably not?
+            if(throttle > 80) 
+                throttle=80;
+            else if(throttle < 1)
+                throttle=1;
         }
-
+      } else if (gas_pedal == on) {
+        throttle = 80;
+      } else {
+        throttle = 0;
+      }
+      
+      err = OSMboxPost(Mbox_Throttle, (void *) &throttle);
+      
       IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE, led_red);
       IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_GREENLED9_BASE, led_green);
     }
@@ -369,6 +386,8 @@ void turn_off_cruise_control()
 void ButtonIO(void* pdata)
 {
     INT8U err;
+    INT16S target;
+    INT16S* current;
     int keys;
   while(1)
   {  
@@ -376,15 +395,20 @@ void ButtonIO(void* pdata)
     keys = buttons_pressed();
     if( keys & CRUISE_CONTROL_FLAG ) {  /* key 1 */
         if(cruise_control == on) {
-            turn_off_cruise_control(); 
+            turn_off_cruise_control();
+            target = 0; 
         } else if(top_gear == on) {
-            INT16S* vel = (INT16S*) OSMboxPend(Mbox_Velocity, 0, &err);
-            if( (*vel / 10) >= 20) {
-                show_target_velocity((INT8U) (*vel / 10));
-                err = OSMboxPost(Mbox_Target, (void *) vel);
+            current = (INT16S*) OSMboxPend(Mbox_Velocity, 0, &err);
+            if( *current >= 200) {
+                target = *current;
+                show_target_velocity((INT8U) (target / 10));
+                //err = OSMboxPost(Mbox_Target, (void *) &target);   POSTED BELOW
                 led_green = led_green | LED_GREEN_2; // LEDG2 on
                 cruise_control = on;
-                printf("cruise_control on\n");
+                printf("cruise_control on, target = %d\n", target);
+            } else {
+                // Post current target
+                err = OSMboxPost(Mbox_Target, (void *) &target);            
             }
         }
     }
@@ -418,6 +442,7 @@ void ButtonIO(void* pdata)
             printf("gas pedal up\n");
         }
     }
+    
     //printf("ButtonIO working \n");
   }
 }
