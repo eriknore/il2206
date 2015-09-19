@@ -323,7 +323,7 @@ void ControlTask(void* pdata)
   INT8U throttle = 0; /* Value between 0 and 80, which is interpreted as between 0.0V and 8.0V */
   void* msg;
   INT16S* current_velocity;
-  INT8S diff;
+  INT16S* target_velocity; // change to INT8U
   
   turn_off_cruise_control();
 
@@ -336,11 +336,9 @@ void ControlTask(void* pdata)
       
       msg = OSMboxAccept(Mbox_Target);
       if(msg == NULL)
-        diff = 0;
+        target_velocity = 0;
       else 
-        diff = *((INT16S *) msg) - *current_velocity;
-        // diff = target - current
-        // e.g. target = 240, current = 250 => diff = -10
+        target_velocity = (INT16S*) msg;
       
       OSSemPend(Sem_Cont, 0, &err);
       // timer!
@@ -348,14 +346,29 @@ void ControlTask(void* pdata)
       
       /* P-controller starts here */
       if (cruise_control == on) {
-        if(diff < -5) { 
-            printf("no throttle!\n");
-            throttle = 0;
-        } else if(diff > 5) {
-            printf("full throttle!\n");
-            throttle = 80;
+        printf("target = %d : current = %d\n", *target_velocity, *current_velocity);
+        if (throttle == 0){ // minimum possible velocity is 1 if cruise control == on
+            throttle=40; // default to 40 if no throttle
         } else {
-            throttle = 10;
+            /* Increase in throttle proportional to the difference 
+             * between target and current velocity.
+             * 100's used to bypass integer rounding. 
+             */ 
+            if( (*target_velocity - *current_velocity) < -12) { // e.g. target = 240, current = 260
+                printf("no throttle!\n");
+                throttle = 1;
+            } else if( (*target_velocity - *current_velocity) > 12) {
+                printf("full throttle!\n");
+                throttle = 80;
+            } else {
+                throttle = (throttle * (100 + 200 * (*target_velocity - *current_velocity) / *current_velocity)) / 100;
+                printf("throttle = %d!\n", throttle);
+            }
+            // could this overflow? Probably not?
+            if(throttle > 80) 
+                throttle=80;
+            else if(throttle < 1)
+                throttle=1;
         }
       } else if (gas_pedal == on) {
         throttle = 80;
