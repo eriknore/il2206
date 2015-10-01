@@ -1,4 +1,4 @@
-/*
+3/*
   Functions.c
 
   Ingo Sander, 2005-10-04

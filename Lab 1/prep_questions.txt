@@ -1,6 +1,7 @@
 Lab 1 - preparation question
 
-1) 
+1)
+
 a) true. Write is non-blocking (for all three OSQPost___): 
 "If the message queue is full, an error code is returned indicating that the queue is
 full. OSQPostOpt() then immediately returns to its caller, and the message is not placed in the queue."
@@ -10,3 +11,15 @@ c) false.
 d) false.
 e) true, timeout is set as a parameter.
 f) true if timeout is set to 0.
+
+2) Using Malloc can lead to fragmentation (small areas of memory, unusable because of the size) and the time it takes for allocation/deallocation is nondeterministic. OSMemCreate() in uC/OS should be used instead. The running time is constant, the memory allocated is in one contigous area and with it you can optain memory blocks of different sizes.
+
+3) 
+a) A void pointer is pointing to some memory with an unknown type, meaning that the size of what is pointed to is unknown and cannot be deferred. It can be used to point to anything and is practical if you want an arbitrary datastructure to be returned or supplied as an argument. With type cast you can set how the pointer should be deffered.
+
+b) The pointer must be type casted for deffering the pointer correctly, i.e. the type of the message must be known by programmer.
+
+4) Minimizing the number of variables used, be sure to declare local variables outside of loops etc. Trying to use operations that are effectivly peformed by the CPU (e.g. using bitshift instead of multiply with 2). Minimizing the number of I/O-operations since these can't be cashed. Trying to write as compact code as possible. 
+
+5) OSTaskStkChk() returns a data structure with how much of the stack space is used (OSUsed) and unused (OSFree).
+OSMemQuery() returns the control block of a certain partition. With the control block you can learn the size of each block, how much is used/free and the total size of the partition.
