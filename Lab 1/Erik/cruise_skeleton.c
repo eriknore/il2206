@@ -4,16 +4,10 @@
 #include "altera_avalon_pio_regs.h"
 #include "sys/alt_irq.h"
 #include "sys/alt_alarm.h"
-#include "alt_types.h"
-#include <time.h>
-#include <sys/alt_timestamp.h>
-#include <sys/alt_cache.h>
 
 extern void simulated_load(INT8U millisec);
 
 #define DEBUG 1
-
-#define INTERVAL 100 /* in milliseconds */
 
 #define HW_TIMER_PERIOD 100 /* 100ms */
 
@@ -68,7 +62,6 @@ OS_STK OverloadDetection_Stack[TASK_STACKSIZE];
 #define CONTROL_PERIOD  300
 #define VEHICLE_PERIOD  300
 #define POLL_PERIOD     300
-#define POLL_PERIOD     300
 /*
  * Definition of Kernel Objects 
  */
@@ -84,16 +77,14 @@ OS_EVENT *Sem_Veh;
 OS_EVENT *Sem_Cont;
 OS_EVENT *Sem_Button;
 OS_EVENT *Sem_Switch;
-OS_EVENT *Sem_Load;
 OS_EVENT *Sem_Watchdog;
 OS_EVENT *Sem_OkSignal;
 
 // SW-Timer
 OS_TMR *Tmr_Veh;
-OS_TMR *Tmr_Cont; // possible optimisation?
+OS_TMR *Tmr_Cont;
 OS_TMR *Tmr_Button;
 OS_TMR *Tmr_Switch;
-OS_TMR *Tmr_Load;
 OS_TMR *Tmr_Watchdog;
 
 /*
@@ -251,7 +242,7 @@ void show_position(INT16U position)
  * acceleration.
  */
 INT16S adjust_velocity(INT16S velocity, INT8S acceleration,  
-		       enum active brake_pedal, INT16U time_interval)
+               enum active brake_pedal, INT16U time_interval)
 {
   INT16S new_velocity;
   INT8U brake_retardation = 200;
@@ -289,23 +280,19 @@ void VehicleTask(void* pdata)
       err = OSMboxPost(Mbox_Velocity, (void *) &velocity);
         
       OSSemPend(Sem_Veh, 0, &err);
-      // timer!
-      
-      //OSTimeDlyHMSM(0,0,0,VEHICLE_PERIOD); 
-
       /* Non-blocking read of mailbox: 
-	   - message in mailbox: update throttle
-	   - no message:         use old throttle
+       - message in mailbox: update throttle
+       - no message:         use old throttle
       */
       msg = OSMboxPend(Mbox_Throttle, 1, &err); 
       if (err == OS_NO_ERR) 
-	     throttle = (INT8U*) msg;
+         throttle = (INT8U*) msg;
 
       /* Retardation : Factor of Terrain and Wind Resistance */
       if (velocity > 0)
-	     wind_factor = velocity * velocity / 10000 + 1;
+         wind_factor = velocity * velocity / 10000 + 1;
       else 
-	     wind_factor = (-1) * velocity * velocity / 10000 + 1;
+         wind_factor = (-1) * velocity * velocity / 10000 + 1;
          
       if (position < 4000) 
          retardation = wind_factor; // even ground
@@ -320,7 +307,7 @@ void VehicleTask(void* pdata)
               else
                   retardation = wind_factor - 5 ; // traveling steep downhill
                   
-      acceleration = *throttle / 2 - retardation;	  
+      acceleration = *throttle / 2 - retardation;     
       position = adjust_position(position, velocity, acceleration, 300); 
       velocity = adjust_velocity(velocity, acceleration, brake_pedal, 300); 
       printf("Position: %dm\n", position / 10);
@@ -360,19 +347,13 @@ void ControlTask(void* pdata)
       else 
         diff = *((INT16S *) msg) - *current_velocity;
         
-      // diff = target - current
-      // e.g. target = 240, current = 250 => diff = -10
       OSSemPend(Sem_Cont, 0, &err);
-      // timer!
-      //OSTimeDlyHMSM(0,0,0, CONTROL_PERIOD);
-      
+
       /* P-controller starts here */
       if (cruise_control == on) {
         if(diff < -5) { 
-            //printf("no throttle!\n");
             throttle = 0;
         } else if(diff > 5) {
-            //printf("full throttle!\n");
             throttle = 80;
         } else {
             throttle = 10;
@@ -385,7 +366,6 @@ void ControlTask(void* pdata)
       
       err = OSMboxPost(Mbox_Throttle, (void *) &throttle);
       
-//      IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE, led_red);
       IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_GREENLED9_BASE, led_green);
     }
 }
@@ -395,7 +375,6 @@ void turn_off_cruise_control()
     led_green = led_green & ~LED_GREEN_2; // LEDG2 off
     cruise_control = off;
     show_target_velocity(0);
-    //printf("cruise_control off\n");
 }
 
 // button-polling task
@@ -418,10 +397,8 @@ void ButtonIO(void* pdata)
             if( *current >= 200) {
                 target = *current;
                 show_target_velocity((INT8U) (target / 10));
-                //err = OSMboxPost(Mbox_Target, (void *) &target);   POSTED BELOW
                 led_green = led_green | LED_GREEN_2; // LEDG2 on
                 cruise_control = on;
-                //printf("cruise_control on, target = %d\n", target);
             }
         }
     }
@@ -466,6 +443,7 @@ void SwitchIO(void* pdata)
 {
   INT8U err;
   int switches;
+  INT16S* vel;
   
   while(1)
   {
@@ -480,13 +458,14 @@ void SwitchIO(void* pdata)
         } // else do nothing
     } else {
         if(engine == on) {
-            INT16S* vel = (INT16S*) OSMboxPend(Mbox_Velocity, 0, &err);
+            vel = (INT16S*) OSMboxPend(Mbox_Velocity, 0, &err);
+            OSMboxPost(Mbox_Velocity, vel);
             if(*vel == 0) {
                 led_red = led_red & ~LED_RED_0;
                 engine = off;
                 //printf("Turning engine off\n");
             }
-        } // else do nothing, TODO test that this is the case!!
+        } // else do nothing
             
     }
     
@@ -511,48 +490,50 @@ void SwitchIO(void* pdata)
  * the switches SW4-SW9 interpreted as a binary number and dubbled. 
  * The extra load is therefore measured in increments of 2ms.
  */
+ 
+void simulated_load2(int delay)
+{
+    OSTimeDly(delay);
+}
+ 
 void ExtraLoad(void *pdata)
 {
-  INT8U err;
-  INT16U extra_load, factor = POLL_PERIOD / 100; // 1% extra load = 3ms
+  // With POLL_PERIOD = 300 then 1% extra load = 3ms
+  INT16U extra_load, factor = POLL_PERIOD / 100;
   INT32S switches;
   while(1)
   {
-    OSSemPend(Sem_Load,0,&err);
     switches = (switches_pressed() >> 4) & 0x3F; // mask SW9-SW4
     extra_load = (INT8U) switches << 1; // extra_load = 2 * <value of switches>
     if(extra_load > 100)
-        extra_load = 100; // in percent of 100ms
+        extra_load = 100; // 100% is max load
     // set LEDR9-LEDR4 to 0 and then mask with switches
     led_red = (led_red & ~0x3F0) | (switches << 4);
     IOWR_ALTERA_AVALON_PIO_DATA(DE2_PIO_REDLED18_BASE, led_red);
     
     /* now simulate the work by delaying */
     extra_load *= factor;
-    // delays extra_load in steps of 0.1 milliseconds
     simulated_load(extra_load);
     // yield the rest of the time
-    //OSTimeDlyHMSM(0,0,0, (CONTROL_PERIOD-extra_load));
+    OSTimeDlyHMSM(0,0,0, (POLL_PERIOD-extra_load));
   } 
 }
 
 void Watchdog(void *pdata)
 {
     INT8U err;
-    char *magic;
-    
+    char *magic; // actually not checked
     while(1)
     {
         OSSemPend(Sem_Watchdog, 0, &err);
         // post to semaphore blocking the ok signal
         OSSemPost(Sem_OkSignal);
         // wait for the signal with a timeout
-        // note timeout in ticks, therefore ticks = POLL_PERIOD*(ticks per millisecond)
-        // Max ticks = 65535, therefore max value of POLL_PERIOD is 655!
+        // note timeout in ticks 1000 ticks/s => 1 tick = 1 ms
         magic = (char *) OSMboxPend(Mbox_OkSignal, POLL_PERIOD, &err); // max, change later!
         // overload error message if it timed out
         if(err == OS_ERR_TIMEOUT) {
-            printf("ERROR: Overload detected!\n");
+            printf("WARNING: Overload detected!\n");
         }
         // could check magic value here...
     }   
@@ -599,19 +580,17 @@ void StartTask(void* pdata)
   /* 
    * Create and start Software Timer 
    */
-  // x_PERIOD in 1/10th of 1s => x_PERIOD/100 
+  // need x_PERIOD in 1/10th of 1s => x_PERIOD/100 
   Tmr_Cont = OSTmrCreate(0, (CONTROL_PERIOD/100), OS_TMR_OPT_PERIODIC, SemCallback, &Sem_Cont, NULL, &err);
   Tmr_Veh = OSTmrCreate(0, (VEHICLE_PERIOD/100), OS_TMR_OPT_PERIODIC, SemCallback, &Sem_Veh, NULL, &err);
   Tmr_Button = OSTmrCreate(0, (POLL_PERIOD/100), OS_TMR_OPT_PERIODIC, SemCallback, &Sem_Button, NULL, &err);
   Tmr_Switch = OSTmrCreate(0, (POLL_PERIOD/100), OS_TMR_OPT_PERIODIC, SemCallback, &Sem_Switch, NULL, &err);
-  Tmr_Load = OSTmrCreate(0, (INTERVAL/100), OS_TMR_OPT_PERIODIC, SemCallback, &Sem_Load, NULL, &err);
   Tmr_Watchdog = OSTmrCreate(0, (POLL_PERIOD/100), OS_TMR_OPT_PERIODIC, SemCallback, &Sem_Watchdog, NULL, &err);
   
   OSTmrStart(Tmr_Cont, &err);
   OSTmrStart(Tmr_Veh, &err);
   OSTmrStart(Tmr_Button, &err);
   OSTmrStart(Tmr_Switch, &err);
-  OSTmrStart(Tmr_Load, &err);
   OSTmrStart(Tmr_Watchdog, &err);  
   
   /*
@@ -629,7 +608,6 @@ void StartTask(void* pdata)
   Sem_Cont = OSSemCreate(1);
   Sem_Button = OSSemCreate(1);
   Sem_Switch = OSSemCreate(1);
-  Sem_Load = OSSemCreate(1);
   Sem_Watchdog = OSSemCreate(1);
   Sem_OkSignal = OSSemCreate(0); // incremented by watchdog
    
@@ -645,17 +623,17 @@ void StartTask(void* pdata)
 
 
   err = OSTaskCreateExt(
-	   ControlTask, // Pointer to task code
-	   NULL,        // Pointer to argument that is
-	                // passed to task
-	   &ControlTask_Stack[TASK_STACKSIZE-1], // Pointer to top
-							 // of task stack
-	   CONTROLTASK_PRIO,
-	   CONTROLTASK_PRIO,
-	   (void *)&ControlTask_Stack[0],
-	   TASK_STACKSIZE,
-	   (void *) 0,
-	   OS_TASK_OPT_STK_CHK);
+       ControlTask, // Pointer to task code
+       NULL,        // Pointer to argument that is
+                    // passed to task
+       &ControlTask_Stack[TASK_STACKSIZE-1], // Pointer to top
+                             // of task stack
+       CONTROLTASK_PRIO,
+       CONTROLTASK_PRIO,
+       (void *)&ControlTask_Stack[0],
+       TASK_STACKSIZE,
+       (void *) 0,
+       OS_TASK_OPT_STK_CHK);
 
   err = OSTaskCreateExt(
        VehicleTask, // Pointer to task code
@@ -754,11 +732,11 @@ int main(void) {
   printf("Lab: Cruise Control\n");
  
   OSTaskCreateExt(
-	 StartTask, // Pointer to task code
+     StartTask, // Pointer to task code
          NULL,      // Pointer to argument that is
                     // passed to task
          (void *)&StartTask_Stack[TASK_STACKSIZE-1], // Pointer to top
-						     // of task stack 
+                             // of task stack 
          STARTTASK_PRIO,
          STARTTASK_PRIO,
          (void *)&StartTask_Stack[0],
