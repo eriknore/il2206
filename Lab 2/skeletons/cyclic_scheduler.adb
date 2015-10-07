@@ -47,8 +47,35 @@ procedure Cyclic_Scheduler is
 
    task body Scheduler is
       Z : Integer; -- Output
+      Start : Time;
+      Period : Time;
+      TaskA : Time;
    begin
-      -- Complete the code for the scheduler...
+      Start := Clock;
+      Start := Start + Milliseconds(10);
+      delay until Start;
+      loop
+         Start := Clock;
+	 Period := Start + Milliseconds(1000);
+
+         TaskA := Start + Milliseconds(500);
+	 X := System_A(X);
+	 Put(Duration'Image(To_Duration(Clock - Start)));
+	 Put_Line(": A executed");
+	 delay until TaskA;
+
+         Y := System_B(Y);
+	 Put(Duration'Image(To_Duration(Clock - Start)));
+	 Put_Line(": B executed");
+
+	 Z := System_C(X,Y);
+	 Put(Duration'Image(To_Duration(Clock - Start)));
+	 Put_Line(": C executed");
+	 Put(" Z : ");
+	 Put_Line(Integer'Image(Z));
+
+	 delay until Period;
+      end loop;
    end Scheduler;
 
 begin

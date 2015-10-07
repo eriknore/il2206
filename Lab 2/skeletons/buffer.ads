@@ -5,7 +5,9 @@ package Buffer is
    type Item_Array is array(Index) of Item;
 
    protected type CircularBuffer is
-      -- To be completed
+      entry Push(Number : Integer);
+      entry Pop;
+      function Read return Integer;
    private
       A: Item_Array;
       In_Ptr, Out_Ptr: Index := 0;
