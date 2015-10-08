@@ -5,8 +5,8 @@ package body Buffer is
       entry Push(Number : Integer)
 	when not(In_Ptr = Out_Ptr - 1) is
       begin
-         A(In_Ptr) := Number;
 	 In_Ptr := In_Ptr + 1;
+         A(In_Ptr) := Number;
       end Push;
 
       entry Pop
