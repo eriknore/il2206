@@ -6,8 +6,7 @@ package Buffer is
 
    protected type CircularBuffer is
       entry Push(Number : Integer);
-      entry Pop;
-      function Read return Integer;
+      entry Pop(Number : out Integer);
    private
       A: Item_Array;
       In_Ptr, Out_Ptr: Index := 0;

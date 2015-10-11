@@ -25,8 +25,7 @@ procedure ProducerConsumer_Rndvzs is
 
    task type Server is
 	entry Push(Value : Integer);
-	entry Pop;
-	entry Read;
+	entry Pop(Value : out Integer);
    end Server;
 
    s : Server;
@@ -44,13 +43,14 @@ procedure ProducerConsumer_Rndvzs is
    end;
 
    task body Consumer is
+      X : Integer;
       Next : Time;
    begin
       Next := Clock;
       for I in 1..N loop
-	 S.Pop;
-	 S.Read;
-         --Put_Line(Integer'Image(Server.Read));
+	 S.Pop(X);
+         Put_Line(Integer'Image(X));
+         -- Next 'Release' in 50..250ms
          Next := Next + Milliseconds(Random(G));
          delay until Next;
       end loop;
@@ -63,13 +63,9 @@ procedure ProducerConsumer_Rndvzs is
 	 accept Push(Value : Integer) do
 	     Buf.Push(Value);
 	 end Push;
-	 accept Pop do
-	     Buf.Pop;
+	 accept Pop(Value : out Integer) do
+	     Buf.Pop(Value);
 	 end Pop;
-	 accept Read do
-	     --return Buf.Read;
-	     Put_Line(Integer'Image(Buf.Read));
-	 end Read;
       end loop;
    end Server;
 

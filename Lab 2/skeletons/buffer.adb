@@ -9,16 +9,12 @@ package body Buffer is
          A(In_Ptr) := Number;
       end Push;
 
-      entry Pop
+      entry Pop(Number : out Integer)
 	when not(In_Ptr = Out_Ptr) is
       begin
          Out_Ptr := Out_Ptr + 1;
+	 Number := A(Out_Ptr);
       end Pop;
-
-      function Read return Integer is
-      begin
-         return A(Out_Ptr); 
-      end Read;
    end CircularBuffer;
 end Buffer;
 

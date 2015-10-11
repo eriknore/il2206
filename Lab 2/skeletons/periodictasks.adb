@@ -1,4 +1,5 @@
-pragma Task_Dispatching_Policy(FIFO_Within_Priorities);
+--pragma Task_Dispatching_Policy(FIFO_Within_Priorities);
+pragma Priority_Specific_Dispatching(Round_Robin_Within_Priorities, 10, 20);
 
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;

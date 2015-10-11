@@ -37,12 +37,13 @@ procedure ProducerConsumer_Prot is
    end;
 
    task body Consumer is
+      X : Integer;
       Next : Time;
    begin
       Next := Clock;
       for I in 1..N loop
-	 Buf.Pop;
-         Put_Line(Integer'Image(Buf.Read));
+	 Buf.Pop(X);
+         Put_Line(Integer'Image(X));
          Next := Next + Milliseconds(Random(G));
          delay until Next;
       end loop;
