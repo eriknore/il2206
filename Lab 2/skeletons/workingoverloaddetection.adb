@@ -52,13 +52,13 @@ procedure WorkingOverloadDetection is
       loop
        select
          accept TaskFinished(Id : Integer) do
-	    if (Id = 14) then
+	    if (Id = 1) then
 		T1 := 1;
-            elsif (Id = 12) then
+            elsif (Id = 2) then
 		T2 := 1;
-            elsif (ID = 10) then
+            elsif (ID = 3) then
 		T3 := 1;
-            elsif (ID = 8) then
+            elsif (ID = 4) then
 	 	T4 := 1;
 	    end if;
 	 end TaskFinished;

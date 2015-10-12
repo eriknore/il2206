@@ -99,7 +99,7 @@ procedure OverloadDetection is
    end T;
 
    -- Example Task
-   Task1 : T(1, 14, 300, 9); -- 8 => about 0.100 s of work
+   Task1 : T(1, 14, 300, 9); -- 9 => about 0.100 s of work
    Task2 : T(2, 12, 400, 9);
    Task3 : T(3, 10, 600, 9);
 

@@ -47,7 +47,7 @@ procedure MixedScheduling is
    end T;
 
    -- Example Task
-   Task1 : T(1, 14, 300, 8); -- 8 => about 0.100 s of work
+   Task1 : T(1, 14, 300, 8); -- 9 => about 0.100 s of work
    Task2 : T(2, 12, 400, 8);
    Task3 : T(3, 10, 600, 8);
    Task4 : T(4, 1,  0,   8);
