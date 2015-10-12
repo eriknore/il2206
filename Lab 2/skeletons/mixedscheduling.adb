@@ -1,9 +1,11 @@
-pragma Task_Dispatching_Policy(FIFO_Within_Priorities);
+pragma Priority_Specific_Dispatching(FIFO_Within_Priorities, 2, 30);
+pragma Priority_Specific_Dispatching(Round_Robin_Within_Priorities, 1, 1);
+
 
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 
-procedure RMS is
+procedure MixedScheduling is
 
    Start : Time;
 
@@ -45,12 +47,14 @@ procedure RMS is
    end T;
 
    -- Example Task
-   Task1 : T(1, 14, 300, 9); -- 8 => about 0.100 s of work
-   Task2 : T(2, 12, 400, 9);
-   Task3 : T(3, 10, 600, 9);
-   --Task4 : T(4, 8,  900, 17);
+   Task1 : T(1, 14, 300, 8); -- 8 => about 0.100 s of work
+   Task2 : T(2, 12, 400, 8);
+   Task3 : T(3, 10, 600, 8);
+   Task4 : T(4, 1,  0,   8);
+   Task5 : T(5, 1,  0,   8);
+   Task6 : T(6, 1,  0,   8);
    
 begin
    Start := Clock;
    null;
-end RMS;
+end MixedScheduling;
