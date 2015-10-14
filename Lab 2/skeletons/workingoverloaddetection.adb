@@ -115,7 +115,7 @@ procedure WorkingOverloadDetection is
    Task1 : T(1, 14, 300, 9); -- 9 => about 0.100 s of work
    Task2 : T(2, 12, 400, 9);
    Task3 : T(3, 10, 600, 9);
-   Task4 : T(4, 8,  900, 17);
+   Task4 : T(4, 8,  900, 18);
 
    D  : Detect(WatchPeriod);
    

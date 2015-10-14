@@ -1,4 +1,4 @@
-FILES= cyclic_scheduler executiontimes mixedscheduling overloaddetection overloaddetection2 paralleltasks periodictasks producerconsumer producerconsumer_prot producerconsumer_rndvzs producerconsumer_sem rms workingoverloaddetection
+FILES= cyclic_scheduler executiontimes mixedscheduling overloaddetection overloaddetection2 paralleltasks periodictasks producerconsumer producerconsumer_prot producerconsumer_rndvzs producerconsumer_sem rms workingoverloaddetection extra
 
 all: compile clean_build
 
